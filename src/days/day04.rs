@@ -1,3 +1,5 @@
+use std::array::from_fn;
+
 pub const EXAMPLE: &str = "\
 7,4,9,5,11,17,23,2,0,14,21,24,10,16,13,6,15,25,12,22,18,20,8,19,3,26,1
 
@@ -19,157 +21,58 @@ pub const EXAMPLE: &str = "\
 22 11 13  6  5
  2  0 12  3  7";
 
-
- #[derive(Debug)]
-pub struct Input{
-    numbers: Vec<u32>,
-    boards: Vec<Board>
+ pub struct Input {
+    turn: usize,
+    score: usize,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Board{
-    matrix: Vec<Vec<u32>>,
-    marked: Vec<u32>,
-    is_winner: bool,
-}
+pub fn parse(input: &str) -> Vec<Input> {
+    let mut to_turn = [0; 100];
+    let mut from_turn = [0; 100];
 
-pub fn parse(input: &str) -> Input{
-    let lines = input.lines().next().expect("should contain at least 1 line").split(',').map(|x| x.parse::<u32>().expect("Should be int")).collect();
+    let mut chunks = input.split("\n\n");
 
-    let boards = get_boards(input);
-     
-    Input { numbers: lines, boards }
-}
-
-fn get_boards(input: &str) -> Vec<Board> {
-    let mut boards = Vec::new();
-    let mut board = Vec::new();
-    let marked = Vec::new();
-
-    for line in input.lines().skip(2){
-        if line.is_empty(){
-            boards.push(Board { matrix: board.clone(), marked: marked.clone(), is_winner: false });
-            board.clear();
-        }else{
-            let row = line.split_whitespace().map(|x| x.parse::<u32>().expect("Should be int")).collect::<Vec<u32>>();
-            board.push(row);
-        }
+    for (i, n) in chunks.next().unwrap().split(',').map(|s| s.parse::<usize>().unwrap()).enumerate() {
+        to_turn[n] = i;
+        from_turn[i] = n;
     }
 
-    boards.push(Board{matrix: board, marked, is_winner: false});
+    let score = |chunk: &str| {
+        let mut iter = chunk.split_whitespace().map(|s| s.parse::<usize>().unwrap());
+        let board: [usize; 25] = from_fn(|_| iter.next().unwrap());
+        let turns: [usize; 25] = from_fn(|i| to_turn[board[i]]);
 
-    boards
+        let row_and_cols = [
+            turns[0..5].iter().max().unwrap(),
+            turns[5..10].iter().max().unwrap(),
+            turns[10..15].iter().max().unwrap(),
+            turns[15..20].iter().max().unwrap(),
+            turns[20..25].iter().max().unwrap(),
+            turns.iter().step_by(5).max().unwrap(),
+            turns.iter().skip(1).step_by(5).max().unwrap(),
+            turns.iter().skip(2).step_by(5).max().unwrap(),
+            turns.iter().skip(3).step_by(5).max().unwrap(),
+            turns.iter().skip(4).step_by(5).max().unwrap(),
+        ];
+        let winning_turn = **row_and_cols.iter().min().unwrap();
+        let unmarked: usize = board.iter().filter(|&&n| to_turn[n] > winning_turn).sum();
+        let just_called = from_turn[winning_turn];
+
+        Input { turn: winning_turn, score: unmarked * just_called }
+    };
+
+    let mut scores: Vec<_> = chunks.map(score).collect();
+    scores.sort_unstable_by_key(|s| s.turn);
+    scores
 }
 
-fn check_winner(board: &Board) -> Option<Vec<u32>> {
-    // Check rows
-    for row in &board.matrix {
-        if row.iter().all(|&x| board.marked.contains(&x)) {
-            return Some(row.clone());
-        }
-    }
-
-    // Check columns
-    for i in 0..board.matrix[0].len() {
-        if board.matrix.iter().all(|row| board.marked.contains(&row[i])) {
-            return Some(board.matrix.iter().map(|row| row[i]).collect::<Vec<u32>>());
-        }
-    }
-
-    None
+pub fn part1(input: &[Input]) -> usize {
+    input.first().unwrap().score
 }
 
-fn get_all_unmarked(board: &Board) -> Vec<u32> {
-    let mut unmarked = Vec::new();
-    for row in &board.matrix {
-        for &num in row {
-            if !board.marked.contains(&num) {
-                unmarked.push(num);
-            }
-        }
-    }
-    unmarked
+pub fn part2(input: &[Input]) -> usize {
+    input.last().unwrap().score
 }
-
-pub fn part1(input: &Input) -> u32{
-    let mut boards = input.boards.clone();
-    let mut numbers = input.numbers.clone();
-    let mut winner = false;
-    let mut score = 0;
-
-    for number in numbers {
-        // println!("Number: {}", number);
-        for board in &mut boards {
-            // println!("Marked: {:?}", board.marked);
-            if !board.marked.contains(&number) {
-                board.marked.push(number);
-            }
-            let winner_check = check_winner(board);
-            if winner_check.is_some() {
-                // println!("Winner board: {:?}", board);
-                winner = true;
-                let sum = get_all_unmarked(board).iter().sum::<u32>();
-                score = number  * sum;
-                // println!("number: {number}, sum: {sum}, {:?}", winner_check.unwrap());
-                break;
-            }
-        }
-        if winner {
-            break;
-        }
-    }
-
-    score
-}
-
-pub fn part2(input: &Input) -> u32{
-    let mut boards = input.boards.clone();
-    let mut winner_boards = Vec::new();
-    let numbers = input.numbers.clone();
-    let boards_count = boards.len();
-    let mut winner = false;
-    let mut score = 0;
-
-    for number in numbers {
-        // println!("Number: {}", number);
-        
-
-        if winner {
-            let board = boards.iter_mut().find(|b| !b.is_winner).unwrap(); // Find the last winning board
-            board.marked.push(number);
-            println!("Winner board: {:?}", board);
-            // println!("Winner boards: {:?}", winner_boards);
-
-            let sum = get_all_unmarked(board).iter().sum::<u32>();
-            println!("number: {number}, sum: {sum}, {:?}", board.marked);
-            score = number  * sum;
-            break;
-        }
-
-        for board in &mut boards {
-            if board.is_winner {
-                continue; // Skip already winning boards
-            }
-            // println!("Marked: {:?}", board.marked);
-            if !board.marked.contains(&number) {
-                board.marked.push(number);
-            }
-
-            let winner_check = check_winner(board);
-            if winner_check.is_some() {
-                board.is_winner = true; // Mark the board as a winner
-                winner_boards.push(board.clone()); // Add the winning board to the list
-
-                if boards_count - 1 == winner_boards.len() {
-                    winner = true;
-                }
-            }
-        }
-    }
-
-    score
-}
-
 
 #[cfg(test)]
 mod tests {
